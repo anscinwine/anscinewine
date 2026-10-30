@@ -168,6 +168,7 @@ export function startFullTextReveal() {
   const el = document.getElementById('board')
   if (!el) return
 
+  el.style.opacity = '1'
   el.classList.add('show', 'ready')
   el.style.pointerEvents = 'auto'
 
@@ -284,7 +285,7 @@ function setupDiscord() {
   a.setAttribute('aria-label', `Discord ID: ${DISCORD_ID}`)
 }
 
-export function initBoard() {
+export function initBoard(startHidden = true) {
   const el = document.getElementById('board')
   if (!el) return { update: () => {} }
 
@@ -295,9 +296,14 @@ export function initBoard() {
 
   const music = initMusic(tr)
 
-  el.style.opacity = '1'
-  el.classList.add('show', 'ready')
-  el.style.pointerEvents = 'auto'
+  if (!startHidden) {
+    el.style.opacity = '1'
+    el.classList.add('show', 'ready')
+    el.style.pointerEvents = 'auto'
+  } else {
+    el.style.opacity = '0'
+    el.style.pointerEvents = 'none'
+  }
 
   return {
     music,

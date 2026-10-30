@@ -151,14 +151,38 @@ export function initMusic(tr: (k: string, ...a: any[]) => string) {
     }
   })
 
-  return {
+  const instance = {
     update: (_k: number) => {
       a.volume = 0.95
     },
     toggle,
+    play: () => {
+      tryWebAudioUnlock()
+      userPaused = false
+      a.muted = false
+      a.volume = 0.95
+      return a.play()
+        .then(() => {
+          isAudioUnlocked = true
+          set(true)
+        })
+        .catch(() => {})
+    },
     setLanguageTr: () => {
       set(!a.paused && !a.muted)
     },
   }
+
+  globalMusicInstance = instance
+  return instance
 }
+
+let globalMusicInstance: any = null
+
+export function playMusic() {
+  if (globalMusicInstance) {
+    globalMusicInstance.play()
+  }
+}
+
 

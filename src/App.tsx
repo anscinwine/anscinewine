@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { initBoard, startFullTextReveal, DISCORD_ID } from './board.ts'
+import { playMusic } from './music.ts'
 
 const BASE = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -22,6 +23,7 @@ const GALLERY_IMAGES = [
 ]
 
 export default function App() {
+  const [hasEntered, setHasEntered] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
   const [copiedToast, setCopiedToast] = useState(false)
@@ -40,6 +42,19 @@ export default function App() {
     window.open(`https://discord.com/users/${DISCORD_ID}`, '_blank', 'noopener')
   }
 
+  const handleEnter = useCallback(() => {
+    setHasEntered(true)
+    playMusic()
+    if (videoRef.current) {
+      videoRef.current.muted = true
+      videoRef.current.defaultMuted = true
+      videoRef.current.play().catch(() => {})
+    }
+    setTimeout(() => {
+      startFullTextReveal()
+    }, 200)
+  }, [])
+
   // Smooth slide switch: zero reload, keeps text and icons permanently ready
   const goToPage = useCallback((pageIndex: number) => {
     setCurrentPage(pageIndex)
@@ -55,22 +70,20 @@ export default function App() {
       videoRef.current.play().catch(() => {})
     }
 
-    const tryPlayVideo = () => {
-      if (videoRef.current && videoRef.current.paused) {
-        videoRef.current.muted = true
-        videoRef.current.play().catch(() => {})
-      }
-    }
-    window.addEventListener('click', tryPlayVideo, { once: true, passive: true })
-    window.addEventListener('touchstart', tryPlayVideo, { once: true, passive: true })
-
     const timer = setTimeout(() => {
       setIsLoaded(true)
-      startFullTextReveal()
     }, 100)
 
     // Keyboard navigation
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!hasEntered) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleEnter()
+        }
+        return
+      }
+
       if (e.key === 'Escape') {
         setLightboxImg(null)
       } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -382,20 +395,18 @@ export default function App() {
         Đã copy ID Discord: {DISCORD_ID}
       </div>
 
-      {/* Loading Screen Overlay - instant 100% */}
-      <div id="loading" className={isLoaded ? 'done' : ''}>
-        <div className="box text-center">
-          <div className="flex items-center justify-center gap-1.5 text-white/75 font-medium tracking-widest text-[10px] uppercase mb-1.5">
-            <span data-i18n="load_total" className="text-white/75 text-[10px]">Đang tải</span>
-            <b id="pct" className="text-white text-[10px] font-semibold">100%</b>
-          </div>
-          <div className="w-24 h-[2px] bg-white/15 rounded-full overflow-hidden mx-auto">
-            <div
-              className="h-full bg-white/80"
-              style={{ width: '100%' }}
-            />
-          </div>
-        </div>
+      {/* Pitch-black "Click to enter" Overlay Gateway */}
+      <div
+        className={`fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-700 ease-out ${
+          hasEntered
+            ? 'opacity-0 pointer-events-none scale-105'
+            : 'opacity-100 pointer-events-auto scale-100'
+        }`}
+        onClick={handleEnter}
+      >
+        <p className="text-white/90 font-mono text-sm tracking-[0.2em] lowercase hover:text-white transition-all duration-300 animate-pulse">
+          click to enter
+        </p>
       </div>
     </div>
   )
