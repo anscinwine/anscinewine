@@ -1,0 +1,6 @@
+{
+  "name": "igloo-three",
+  "description": "An immersive 3D winter snow globe experience featuring a decorated Christmas tree, procedural snow drifts, snowfall particles, and an interactive liquid glass bio board with music and social links.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
