@@ -1,4 +1,4 @@
-// Background music: auto 100% play immediately on load with spinning vinyl
+// Background music: auto play bypass with Web Audio API unlock and capture-phase listener
 const BASE = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
   : import.meta.env.BASE_URL + '/'
@@ -15,7 +15,8 @@ export function initMusic(tr: (k: string, ...a: any[]) => string) {
   a.preload = 'auto'
   a.volume = 0.95
 
-  let want = true
+  let isAudioUnlocked = false
+  let userPaused = false
   let ok = true
 
   const say = (k: string) => {
@@ -35,48 +36,87 @@ export function initMusic(tr: (k: string, ...a: any[]) => string) {
     set(false)
   })
   a.addEventListener('playing', () => set(true))
-  a.addEventListener('pause', () => set(false))
+  a.addEventListener('pause', () => {
+    if (userPaused) set(false)
+  })
 
-  // 100% auto play immediately on load!
-  const startAutoplay = () => {
-    if (!want || !ok) return
-    a.volume = 0.95
-    a.muted = false
-    a.play()
-      .then(() => {
-        set(true)
-      })
-      .catch(() => {
-        // Fallback for browsers with strict gesture policy: start muted so vinyl spins, then unmute on first gesture
-        a.muted = true
-        a.play()
-          .then(() => {
-            card.classList.add('playing')
-            say('music_playing')
-          })
-          .catch(() => {})
-      })
+  // Web Audio Context priming to unlock browser audio pipeline
+  const tryWebAudioUnlock = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (AudioCtx) {
+        const ctx = new AudioCtx()
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {})
+        }
+        // Play brief silent buffer
+        const buffer = ctx.createBuffer(1, 1, 22050)
+        const source = ctx.createBufferSource()
+        source.buffer = buffer
+        source.connect(ctx.destination)
+        source.start(0)
+      }
+    } catch {}
   }
 
-  startAutoplay()
-
-  // Instantly unmute and ensure full sound on user interaction
-  const unlockAudio = () => {
-    if (a.muted || a.paused) {
-      a.muted = false
-      a.volume = 0.95
-      a.play().then(() => set(true)).catch(() => {})
+  // 1. Try immediate full unmuted play on page load
+  const attemptDirectAutoplay = () => {
+    tryWebAudioUnlock()
+    a.muted = false
+    a.volume = 0.95
+    const playPromise = a.play()
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          isAudioUnlocked = true
+          set(true)
+        })
+        .catch(() => {
+          // Browser blocked unmuted autoplay -> play muted to spin vinyl, unlock on first gesture
+          a.muted = true
+          a.play()
+            .then(() => {
+              card.classList.add('playing')
+              say('music_playing')
+            })
+            .catch(() => {})
+        })
     }
   }
 
-  const userEvents = ['pointerdown', 'touchstart', 'click', 'keydown', 'scroll', 'mousemove']
-  const onFirstInteraction = () => {
-    unlockAudio()
-    userEvents.forEach(e => window.removeEventListener(e, onFirstInteraction, true))
-  }
-  userEvents.forEach(e => window.addEventListener(e, onFirstInteraction, { capture: true, passive: true }))
+  attemptDirectAutoplay()
 
-  // Show playing state and start vinyl spinning right away!
+  // 2. Global capture-phase unlock on ANY user gesture (click, tap, key, wheel, swipe)
+  const unlockEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown', 'mousedown']
+  const handleUnlock = () => {
+    if (isAudioUnlocked || userPaused) return
+    tryWebAudioUnlock()
+    a.muted = false
+    a.volume = 0.95
+    a.play()
+      .then(() => {
+        isAudioUnlocked = true
+        set(true)
+        cleanupListeners()
+      })
+      .catch(() => {
+        // If still blocked, keep listeners active for next gesture
+      })
+  }
+
+  const cleanupListeners = () => {
+    unlockEvents.forEach(evt => {
+      window.removeEventListener(evt, handleUnlock, true)
+      document.removeEventListener(evt, handleUnlock, true)
+    })
+  }
+
+  unlockEvents.forEach(evt => {
+    window.addEventListener(evt, handleUnlock, { capture: true, passive: true })
+    document.addEventListener(evt, handleUnlock, { capture: true, passive: true })
+  })
+
+  // Start spinning vinyl immediately
   card.classList.add('playing')
   say('music_playing')
 
@@ -85,13 +125,19 @@ export function initMusic(tr: (k: string, ...a: any[]) => string) {
       window.open(NCT, '_blank', 'noopener')
       return
     }
+    tryWebAudioUnlock()
     if (a.paused || a.muted) {
-      want = true
+      userPaused = false
       a.muted = false
       a.volume = 0.95
-      a.play().then(() => set(true)).catch(() => {})
+      a.play()
+        .then(() => {
+          isAudioUnlocked = true
+          set(true)
+        })
+        .catch(() => {})
     } else {
-      want = false
+      userPaused = true
       a.pause()
       set(false)
     }
@@ -107,7 +153,6 @@ export function initMusic(tr: (k: string, ...a: any[]) => string) {
 
   return {
     update: (_k: number) => {
-      // Keep volume full (0.95) since camera is always at the board
       a.volume = 0.95
     },
     toggle,
@@ -116,3 +161,4 @@ export function initMusic(tr: (k: string, ...a: any[]) => string) {
     },
   }
 }
+
